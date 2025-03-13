@@ -6,6 +6,14 @@ use std::{fs};
 use semver::Version;
 use crate::options::native_notify_updated_options;
 
+// Firefox and its forks use the same storage format but with different prefixes
+const EXTENSION_STORAGE_PREFIXES: [&str; 4] = [
+    "moz-extension+++",     // Firefox
+    "moz-extension+++",     // LibreWolf (uses the same prefix)
+    "moz-extension+++",     // Waterfox (uses the same prefix)
+    "moz-extension+++"      // Zen Browser (uses the same prefix)
+];
+
 pub fn process_cmd_initialize(app_state: &mut AppState,
                               mut profiles: ProfilesIniState,
                               msg: NativeMessageInitialize) -> NativeResponse {
@@ -30,10 +38,14 @@ pub fn process_cmd_initialize(app_state: &mut AppState,
         }.filter_map(|it| match it {
             Ok(entry) => Some(entry),
             Err(_) => None
-        }).any(|it| it.file_name()
-            .to_string_lossy()
-            .starts_with(&("moz-extension+++".to_owned() + &msg.extension_id))
-        );
+        }).any(|it| {
+            // Check all possible extension prefixes
+            EXTENSION_STORAGE_PREFIXES.iter().any(|prefix| {
+                it.file_name()
+                    .to_string_lossy()
+                    .starts_with(&(prefix.to_owned() + &msg.extension_id))
+            })
+        });
 
         if ext_installed {
             let profile_id = profile.id.clone();
@@ -86,4 +98,3 @@ fn finish_init(
     // Notify extension of current options
     native_notify_updated_options(app_state);
 }
-

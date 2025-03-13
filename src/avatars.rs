@@ -15,6 +15,13 @@ pub fn build_avatar_path(custom_avatars_path: &Path, ulid: Ulid, ext: &str) -> P
 }
 
 pub fn list_avatars(custom_avatars_path: &Path) -> IndexMap<Ulid, PathBuf> {
+    // Create directory if it doesn't exist to avoid errors
+    if !custom_avatars_path.exists() {
+        if let Err(e) = fs::create_dir_all(custom_avatars_path) {
+            log::warn!("Failed to create custom avatars directory: {:?}", e);
+        }
+    }
+    
     if let Ok(r) = fs::read_dir(custom_avatars_path) {
         // Sort by creation time descending
         let mut dir_entries: Vec<(DirEntry, SystemTime)> = r.filter_map(|f| f.ok())

@@ -38,10 +38,39 @@ pub enum ForkBrowserProcError {
 // List of known browser executable names
 const BROWSER_EXECUTABLES: [&str; 4] = ["firefox", "librewolf", "waterfox", "zen-browser"];
 
+// Flatpak app IDs and binary paths for supported browsers
+const FLATPAK_BROWSERS: [(&str, &str, &str); 4] = [
+    ("firefox", "org.mozilla.firefox", "/var/lib/flatpak/app/org.mozilla.firefox/current/active/files/bin/firefox"),
+    ("librewolf", "io.gitlab.librewolf-community", "/var/lib/flatpak/app/io.gitlab.librewolf-community/current/active/files/bin/librewolf"),
+    ("waterfox", "net.waterfox.waterfox", "/var/lib/flatpak/app/net.waterfox.waterfox/current/active/files/bin/waterfox"),
+    ("zen-browser", "org.mozilla.firefox.zen", "/var/lib/flatpak/app/org.mozilla.firefox.zen/current/active/files/bin/firefox")
+];
+
 // Find browser binary by looking in common locations
 fn find_browser_binary() -> Option<PathBuf> {
     cfg_if! {
         if #[cfg(target_family = "unix")] {
+            // Check home directory for user Flatpak installations
+            if let Ok(home_dir) = env::var("HOME") {
+                for (name, app_id, bin_path) in FLATPAK_BROWSERS.iter() {
+                    // Check user Flatpak installation
+                    let user_flatpak_path = format!("{}/.local/share/flatpak/app/{}/current/active/files/bin/{}", 
+                                                  home_dir, app_id, name);
+                    let user_path_buf = PathBuf::from(&user_flatpak_path);
+                    if user_path_buf.exists() {
+                        log::info!("Found user Flatpak {} at: {}", name, user_flatpak_path);
+                        return Some(user_path_buf);
+                    }
+                    
+                    // Check system Flatpak installation
+                    let system_path_buf = PathBuf::from(bin_path);
+                    if system_path_buf.exists() {
+                        log::info!("Found system Flatpak {} at: {}", name, bin_path);
+                        return Some(system_path_buf);
+                    }
+                }
+            }
+            
             // Check common paths on Linux
             for browser in BROWSER_EXECUTABLES.iter() {
                 // Check standard locations
@@ -58,27 +87,6 @@ fn find_browser_binary() -> Option<PathBuf> {
                         return Some(path_buf);
                     }
                 }
-                
-                // Check flatpak locations
-                if browser == &"firefox" {
-                    let flatpak_path = "/var/lib/flatpak/app/org.mozilla.firefox/current/active/files/bin/firefox";
-                    if PathBuf::from(flatpak_path).exists() {
-                        log::info!("Found Flatpak Firefox at: {}", flatpak_path);
-                        return Some(PathBuf::from(flatpak_path));
-                    }
-                } else if browser == &"librewolf" {
-                    let flatpak_path = "/var/lib/flatpak/app/io.gitlab.librewolf-community/current/active/files/bin/librewolf";
-                    if PathBuf::from(flatpak_path).exists() {
-                        log::info!("Found Flatpak LibreWolf at: {}", flatpak_path);
-                        return Some(PathBuf::from(flatpak_path));
-                    }
-                } else if browser == &"waterfox" {
-                    let flatpak_path = "/var/lib/flatpak/app/net.waterfox.waterfox/current/active/files/bin/waterfox";
-                    if PathBuf::from(flatpak_path).exists() {
-                        log::info!("Found Flatpak Waterfox at: {}", flatpak_path);
-                        return Some(PathBuf::from(flatpak_path));
-                    }
-                }
             }
         } else if #[cfg(target_os = "macos")] {
             // Check common paths on macOS
@@ -86,7 +94,12 @@ fn find_browser_binary() -> Option<PathBuf> {
                 "/Applications/Firefox.app/Contents/MacOS/firefox",
                 "/Applications/LibreWolf.app/Contents/MacOS/librewolf",
                 "/Applications/Waterfox.app/Contents/MacOS/waterfox",
-                "/Applications/Zen Browser.app/Contents/MacOS/zen-browser",
+                "/Applications/Zen Browser.app/Contents/MacOS/firefox",
+                // Also check user Applications folder
+                &format!("{}/Applications/Firefox.app/Contents/MacOS/firefox", env::var("HOME").unwrap_or_default()),
+                &format!("{}/Applications/LibreWolf.app/Contents/MacOS/librewolf", env::var("HOME").unwrap_or_default()),
+                &format!("{}/Applications/Waterfox.app/Contents/MacOS/waterfox", env::var("HOME").unwrap_or_default()),
+                &format!("{}/Applications/Zen Browser.app/Contents/MacOS/firefox", env::var("HOME").unwrap_or_default()),
             ];
             
             for path in browser_paths.iter() {
@@ -105,11 +118,11 @@ fn find_browser_binary() -> Option<PathBuf> {
                 format!("{}\\Mozilla Firefox\\firefox.exe", program_files),
                 format!("{}\\LibreWolf\\librewolf.exe", program_files),
                 format!("{}\\Waterfox\\waterfox.exe", program_files),
-                format!("{}\\Zen Browser\\zen-browser.exe", program_files),
+                format!("{}\\Zen Browser\\firefox.exe", program_files),
                 format!("{}\\Mozilla Firefox\\firefox.exe", program_files_x86),
                 format!("{}\\LibreWolf\\librewolf.exe", program_files_x86),
                 format!("{}\\Waterfox\\waterfox.exe", program_files_x86),
-                format!("{}\\Zen Browser\\zen-browser.exe", program_files_x86),
+                format!("{}\\Zen Browser\\firefox.exe", program_files_x86),
             ];
             
             for path in browser_paths.iter() {

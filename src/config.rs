@@ -80,6 +80,14 @@ fn is_valid_browser_dir(dir: &PathBuf) -> bool {
     profiles_ini.exists()
 }
 
+// Define Flatpak app IDs for supported browsers
+const FLATPAK_APP_IDS: [(&str, &str); 4] = [
+    ("firefox", "org.mozilla.firefox"),
+    ("librewolf", "io.gitlab.librewolf-community"),
+    ("waterfox", "net.waterfox.waterfox"),
+    ("zen-browser", "org.mozilla.firefox.zen")  // Adjust if Zen has a different Flatpak ID
+];
+
 static DEFAULT_BROWSER_PROFILE_FOLDER: Lazy<PathBuf> = Lazy::new(|| {
     let user_dirs = directories::UserDirs::new()
         .expect("Unable to determine user folder!");
@@ -90,19 +98,22 @@ static DEFAULT_BROWSER_PROFILE_FOLDER: Lazy<PathBuf> = Lazy::new(|| {
         if #[cfg(target_os = "linux")] {
             // First check for Flatpak installations
             let home_dir = user_dirs.home_dir().to_path_buf();
-            let flatpak_mozilla_dir = home_dir.join(".var/app/org.mozilla.firefox/.mozilla");
-            let flatpak_librewolf_dir = home_dir.join(".var/app/io.gitlab.librewolf-community/.librewolf");
-            let flatpak_waterfox_dir = home_dir.join(".var/app/net.waterfox.waterfox/.waterfox");
             
-            if is_valid_browser_dir(&flatpak_mozilla_dir.join("firefox")) {
-                log::info!("Found Flatpak Firefox profile dir");
-                return flatpak_mozilla_dir.join("firefox");
-            } else if is_valid_browser_dir(&flatpak_librewolf_dir) {
-                log::info!("Found Flatpak LibreWolf profile dir");
-                return flatpak_librewolf_dir;
-            } else if is_valid_browser_dir(&flatpak_waterfox_dir) {
-                log::info!("Found Flatpak Waterfox profile dir");
-                return flatpak_waterfox_dir;
+            // Try each Firefox fork in Flatpak first
+            for (dir_name, app_id) in FLATPAK_APP_IDS.iter() {
+                let browser_dir_path;
+                if *dir_name == "firefox" {
+                    // Firefox uses .mozilla/firefox subfolder
+                    browser_dir_path = home_dir.join(format!(".var/app/{0}/.mozilla/firefox", app_id));
+                } else {
+                    // Other forks typically use .{name} directly
+                    browser_dir_path = home_dir.join(format!(".var/app/{0}/.{1}", app_id, dir_name));
+                }
+                
+                if is_valid_browser_dir(&browser_dir_path) {
+                    log::info!("Found Flatpak {} profile dir: {:?}", dir_name, browser_dir_path);
+                    return browser_dir_path;
+                }
             }
             
             // Check for standard installations
